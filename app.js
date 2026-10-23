@@ -194,7 +194,7 @@ async function openPanel(id) {
               <summary><span class="tag">${DOC_TYPES[d.doc_type]}</span>${esc(d.title)}</summary>
               <div class="doc-body">${esc(d.body || 'Empty.')}</div>
             </details>`).join('')
-            : '<p class="empty">No documents yet. This is the gap Sergio named — the thinking exists, it just is not written down.</p>'}
+            : '<p class="empty">No documents yet.</p>'}
         </div>
 
         <div class="sec">
