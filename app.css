@@ -211,3 +211,21 @@ textarea { min-height: 96px; resize: vertical; line-height: 21px; }
 
 @media (max-width: 900px) { .board { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---------- scoping sections ---------- */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+@media (max-width: 560px) { .split { grid-template-columns: 1fr; } }
+.scope-box { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-3); background: var(--surface-raised); }
+.scope-box .scope-k { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin-bottom: var(--space-2); }
+.scope-in  .scope-k { color: var(--status-shipped); }
+.scope-out .scope-k { color: var(--status-blocked); }
+.scope-box ul { margin: 0; padding-left: 18px; font-size: 14px; line-height: 21px; }
+.scope-box li { margin-bottom: 4px; }
+.gap { border: 1px dashed var(--brand-gold); background: var(--accent-soft); border-radius: var(--radius-md); padding: var(--space-3); font-size: 13px; line-height: 20px; color: var(--ink-primary); }
+.dec { border-left: 3px solid var(--status-active); padding: 2px 0 2px var(--space-4); }
+.dec-top { font-size: 14px; font-weight: 600; color: var(--ink-heading); line-height: 21px; }
+.dec-meta { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-secondary); margin-top: 2px; }
+.dec-why { font-size: 13px; line-height: 20px; color: var(--ink-secondary); margin-top: 3px; white-space: pre-wrap; }
+.oneline { display: flex; gap: var(--space-2); align-items: baseline; flex-wrap: wrap; font-size: 13px; }
+.oneline .k { font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-secondary); font-size: 11px; }
+.oneline .v { color: var(--ink-primary); font-weight: 600; }

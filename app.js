@@ -25,6 +25,8 @@ const DOC_TYPES = {
   prd: 'PRD', one_pager: 'One-pager', note: 'Note',
   test_result: 'Test result', research: 'Research', decision: 'Decision',
 };
+const OWNERS = ['Jack', 'Luana', 'Lucas'];
+const lines = (t) => String(t || '').split('\n').map((x) => x.replace(/^[-*\u2022]\s*/, '').trim()).filter(Boolean);
 
 const main = document.getElementById('main');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -104,8 +106,7 @@ function cardHTML(item, rank) {
       ${item.summary ? `<span class="card-sum">${esc(item.summary)}</span>` : ''}
       <span class="chips">
         <span class="chip ${unsized ? 'chip-unsized' : 'chip-size'}">${SIZES[item.size]}</span>
-        <span class="st st-${item.status}"><span class="dot"></span>${STATUSES[item.status]}</span>
-        ${item.owner ? `<span class="owner">${esc(item.owner)}</span>` : ''}
+        ${item.owner ? `<span class="owner">${esc(item.owner)}</span>` : '<span class="owner">Unassigned</span>'}
       </span>
       ${blockers.length ? `<span class="dep">→ Blocked by ${esc(blockers.map((b) => b.title).join(', '))}</span>` : ''}
     </button>`;
@@ -151,10 +152,11 @@ async function openPanel(id) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
 
-  const [docs, acs, ups] = await Promise.all([
+  const [docs, acs, ups, decs] = await Promise.all([
     db.from('documents').select('*').eq('item_id', id).order('created_at'),
     db.from('acceptance_criteria').select('*').eq('item_id', id).order('sort_order'),
     db.from('updates').select('*').eq('item_id', id).order('created_at', { ascending: false }),
+    db.from('decisions').select('*').eq('item_id', id).order('decided_on', { ascending: false }),
   ]);
 
   const blockers = blockersFor(id);
@@ -174,31 +176,34 @@ async function openPanel(id) {
 
         <div class="meta">
           <div class="meta-cell"><div class="meta-k">Tier</div><div class="meta-v">${item.tier[0].toUpperCase() + item.tier.slice(1)}</div></div>
-          <div class="meta-cell"><div class="meta-k">Status</div><div class="meta-v"><span class="st st-${item.status}"><span class="dot"></span>${STATUSES[item.status]}</span></div></div>
-          <div class="meta-cell"><div class="meta-k">Size</div><div class="meta-v">${SIZES[item.size]}${item.size_confidence ? ` <span style="font-weight:500;color:var(--ink-secondary)">(${item.size_confidence})</span>` : ''}</div></div>
-          <div class="meta-cell"><div class="meta-k">Owner</div><div class="meta-v">${esc(item.owner || '—')}</div></div>
+          <div class="meta-cell"><div class="meta-k">Estimate</div><div class="meta-v">${SIZES[item.size]}${item.size_confidence ? ` <span style="font-weight:500;color:var(--ink-secondary)">(${item.size_confidence})</span>` : ''}</div></div>
+          <div class="meta-cell"><div class="meta-k">Owner</div><div class="meta-v">${esc(item.owner || 'Unassigned')}</div></div>
         </div>
 
         ${item.size_note ? `<p class="note">${esc(item.size_note)}</p>` : ''}
+        ${item.kpi ? `<p class="oneline"><span class="k">What it moves</span><span class="v">${esc(item.kpi)}</span></p>` : ''}
+
         ${item.summary ? `<div class="sec"><h3>Summary</h3><p class="prose">${esc(item.summary)}</p></div>` : ''}
-        ${item.rationale ? `<div class="sec"><h3>Why</h3><p class="prose">${esc(item.rationale)}</p></div>` : ''}
-        ${item.kpi ? `<div class="sec"><h3>What it moves</h3><p class="prose">${esc(item.kpi)}</p></div>` : ''}
-        ${blockers.length ? `<div class="sec"><h3>Blocked by</h3><p class="prose">${esc(blockers.map((b) => b.title).join(', '))}</p></div>` : ''}
+        ${item.rationale ? `<div class="sec"><h3>Why now</h3><p class="prose">${esc(item.rationale)}</p></div>` : ''}
 
         <div class="sec">
-          <div class="sec-head"><h3>Documents</h3>
-            <button class="btn btn-sm btn-ghost" id="addDocBtn">Add</button></div>
-          <div id="docForm" hidden></div>
-          ${(docs.data || []).length ? (docs.data).map((d) => `
-            <details class="doc">
-              <summary><span class="tag">${DOC_TYPES[d.doc_type]}</span>${esc(d.title)}</summary>
-              <div class="doc-body">${esc(d.body || 'Empty.')}</div>
-            </details>`).join('')
-            : '<p class="empty">No documents yet.</p>'}
+          <h3>Scope</h3>
+          ${(item.scope_in || item.scope_out) ? `
+            <div class="split">
+              <div class="scope-box scope-in"><div class="scope-k">In scope</div>
+                ${lines(item.scope_in).length ? `<ul>${lines(item.scope_in).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="empty">Not defined.</p>'}</div>
+              <div class="scope-box scope-out"><div class="scope-k">Out of scope</div>
+                ${lines(item.scope_out).length ? `<ul>${lines(item.scope_out).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="empty">Not defined.</p>'}</div>
+            </div>` : `<p class="gap">Not scoped yet. Until in and out of scope are written down, this title could mean several different deliverables.</p>`}
         </div>
 
         <div class="sec">
-          <div class="sec-head"><h3>Acceptance criteria</h3>
+          <h3>How we build it</h3>
+          ${item.approach ? `<p class="prose">${esc(item.approach)}</p>` : '<p class="gap">No approach written down. This is the half a roadmap usually leaves out.</p>'}
+        </div>
+
+        <div class="sec">
+          <div class="sec-head"><h3>Definition of done</h3>
             <button class="btn btn-sm btn-ghost" id="addAcBtn">Add</button></div>
           <div id="acForm" hidden></div>
           ${(acs.data || []).length ? (acs.data).map((a) => `
@@ -208,11 +213,48 @@ async function openPanel(id) {
                 ${a.is_met && a.verified_by ? `<span class="ac-by">Verified by ${esc(a.verified_by)} ${fmtDate(a.verified_at)}</span>` : ''}
               </span>
             </label>`).join('')
-            : '<p class="empty">None defined.</p>'}
+            : '<p class="empty">Nothing defined yet.</p>'}
+        </div>
+
+        ${blockers.length ? `<div class="sec"><h3>Depends on</h3><p class="prose">${esc(blockers.map((b) => b.title).join(', '))}</p></div>` : ''}
+
+        <div class="sec">
+          <h3>Risks and unknowns</h3>
+          ${item.risks ? `<p class="prose">${esc(item.risks)}</p>` : '<p class="gap">None recorded. An item with no known risks is usually an item nobody has thought hard about.</p>'}
         </div>
 
         <div class="sec">
-          <div class="sec-head"><h3>Updates</h3>
+          <h3>What it needs</h3>
+          ${item.needs ? `<p class="prose">${esc(item.needs)}</p>` : '<p class="empty">Nothing beyond the team we have.</p>'}
+        </div>
+
+        <div class="sec">
+          <div class="sec-head"><h3>Decisions made</h3>
+            <button class="btn btn-sm btn-ghost" id="addDecBtn">Add</button></div>
+          <div id="decForm" hidden></div>
+          ${(decs.data || []).length ? (decs.data).map((d) => `
+            <div class="dec">
+              <div class="dec-top">${esc(d.decision)}</div>
+              <div class="dec-meta">${esc(d.decided_by || 'Team')} · ${fmtDate(d.decided_on)}</div>
+              ${d.rationale ? `<div class="dec-why">${esc(d.rationale)}</div>` : ''}
+            </div>`).join('')
+            : '<p class="empty">No decisions logged.</p>'}
+        </div>
+
+        <div class="sec">
+          <div class="sec-head"><h3>Attachments</h3>
+            <button class="btn btn-sm btn-ghost" id="addDocBtn">Add</button></div>
+          <div id="docForm" hidden></div>
+          ${(docs.data || []).length ? (docs.data).map((d) => `
+            <details class="doc">
+              <summary><span class="tag">${DOC_TYPES[d.doc_type]}</span>${esc(d.title)}</summary>
+              <div class="doc-body">${esc(d.body || 'Empty.')}</div>
+            </details>`).join('')
+            : '<p class="empty">None.</p>'}
+        </div>
+
+        <div class="sec">
+          <div class="sec-head"><h3>Progress log</h3>
             <button class="btn btn-sm btn-ghost" id="addUpBtn">Post</button></div>
           <div id="upForm" hidden></div>
           ${(ups.data || []).length ? (ups.data).map((u) => `
@@ -228,19 +270,25 @@ async function openPanel(id) {
           <div class="form">
             <label class="f">Title<input type="text" id="eTitle" value="${esc(item.title)}"></label>
             <label class="f">Summary<textarea id="eSummary">${esc(item.summary || '')}</textarea></label>
-            <label class="f">Why<textarea id="eRationale">${esc(item.rationale || '')}</textarea></label>
+            <label class="f">Why now<textarea id="eRationale">${esc(item.rationale || '')}</textarea></label>
             <label class="f">What it moves<input type="text" id="eKpi" value="${esc(item.kpi || '')}"></label>
             <div class="frow">
+              <label class="f">In scope (one per line)<textarea id="eScopeIn">${esc(item.scope_in || '')}</textarea></label>
+              <label class="f">Out of scope (one per line)<textarea id="eScopeOut">${esc(item.scope_out || '')}</textarea></label>
+            </div>
+            <label class="f">How we build it<textarea id="eApproach">${esc(item.approach || '')}</textarea></label>
+            <label class="f">Risks and unknowns<textarea id="eRisks">${esc(item.risks || '')}</textarea></label>
+            <label class="f">What it needs<textarea id="eNeeds" style="min-height:60px">${esc(item.needs || '')}</textarea></label>
+            <div class="frow">
               <label class="f">Tier<select id="eTier">${TIERS.map((t) => `<option value="${t.id}" ${item.tier === t.id ? 'selected' : ''}>${t.name}</option>`).join('')}</select></label>
-              <label class="f">Status<select id="eStatus">${Object.entries(STATUSES).map(([k, v]) => `<option value="${k}" ${item.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-              <label class="f">Size<select id="eSize">${Object.entries(SIZES).map(([k, v]) => `<option value="${k}" ${item.size === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+              <label class="f">Estimate<select id="eSize">${Object.entries(SIZES).map(([k, v]) => `<option value="${k}" ${item.size === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+              <label class="f">Confidence<select id="eConf"><option value="">—</option>${['high', 'medium', 'low'].map((c) => `<option value="${c}" ${item.size_confidence === c ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
             </div>
             <div class="frow">
-              <label class="f">Confidence<select id="eConf"><option value="">—</option>${['high', 'medium', 'low'].map((c) => `<option value="${c}" ${item.size_confidence === c ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
-              <label class="f">Owner<input type="text" id="eOwner" value="${esc(item.owner || '')}"></label>
+              <label class="f">Owner<select id="eOwner"><option value="">Unassigned</option>${OWNERS.map((o) => `<option value="${o}" ${item.owner === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>
               <label class="f">Rank<input type="text" id="eRank" value="${item.sort_order}" inputmode="numeric"></label>
             </div>
-            <label class="f">Sizing note<textarea id="eSizeNote" style="min-height:60px">${esc(item.size_note || '')}</textarea></label>
+            <label class="f">Estimate note<textarea id="eSizeNote" style="min-height:60px">${esc(item.size_note || '')}</textarea></label>
             <div class="actions">
               <button class="btn btn-sm btn-danger" id="delItem">Delete</button>
               <button class="btn btn-sm btn-primary" id="saveItem">Save changes</button>
@@ -324,6 +372,21 @@ function wirePanel(item, root) {
     await db.from('updates').insert({ item_id: item.id, body, author: state.user.email });
   });
 
+  toggleForm('#addDecBtn', '#decForm', `
+    <div class="form">
+      <label class="f">Decision<textarea class="dcText" style="min-height:60px" placeholder="What was decided?"></textarea></label>
+      <label class="f">Why<textarea class="dcWhy" style="min-height:60px" placeholder="Optional."></textarea></label>
+      <div class="actions"><button class="btn btn-sm btn-ghost cancel">Cancel</button><button class="btn btn-sm btn-primary save">Log decision</button></div>
+    </div>`, async (box) => {
+    const decision = box.querySelector('.dcText').value.trim();
+    if (!decision) return;
+    await db.from('decisions').insert({
+      item_id: item.id, decision,
+      rationale: box.querySelector('.dcWhy').value || null,
+      decided_by: state.user.email,
+    });
+  });
+
   root.querySelector('#saveItem').onclick = async () => {
     const rank = parseInt(root.querySelector('#eRank').value, 10);
     const { error } = await db.from('items').update({
@@ -332,11 +395,15 @@ function wirePanel(item, root) {
       rationale: root.querySelector('#eRationale').value,
       kpi: root.querySelector('#eKpi').value,
       tier: root.querySelector('#eTier').value,
-      status: root.querySelector('#eStatus').value,
       size: root.querySelector('#eSize').value,
       size_confidence: root.querySelector('#eConf').value || null,
       size_note: root.querySelector('#eSizeNote').value,
-      owner: root.querySelector('#eOwner').value.trim() || null,
+      scope_in: root.querySelector('#eScopeIn').value,
+      scope_out: root.querySelector('#eScopeOut').value,
+      approach: root.querySelector('#eApproach').value,
+      risks: root.querySelector('#eRisks').value,
+      needs: root.querySelector('#eNeeds').value,
+      owner: root.querySelector('#eOwner').value || null,
       sort_order: Number.isFinite(rank) ? rank : item.sort_order,
     }).eq('id', item.id);
     if (error) { alertInline(root, error.message); return; }
@@ -382,7 +449,7 @@ function newItem() {
         <div class="frow">
           <label class="f">Tier<select id="nTier">${TIERS.map((t) => `<option value="${t.id}">${t.name}</option>`).join('')}</select></label>
           <label class="f">Size<select id="nSize">${Object.entries(SIZES).map(([k, v]) => `<option value="${k}" ${k === 'unsized' ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-          <label class="f">Owner<input type="text" id="nOwner"></label>
+          <label class="f">Owner<select id="nOwner"><option value="">Unassigned</option>${OWNERS.map((o) => `<option value="${o}">${o}</option>`).join('')}</select></label>
         </div>
         <div class="actions"><button class="btn btn-primary" id="createItem">Add item</button></div>
       </div></div>
@@ -398,7 +465,7 @@ function newItem() {
     const { error } = await db.from('items').insert({
       title, summary: root.querySelector('#nSummary').value,
       tier, size: root.querySelector('#nSize').value,
-      owner: root.querySelector('#nOwner').value.trim() || null,
+      owner: root.querySelector('#nOwner').value || null,
       sort_order: last + 1,
     });
     if (error) { alertInline(root, error.message); return; }
